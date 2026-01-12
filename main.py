@@ -3,6 +3,7 @@ from models import RemakeLine, Line
 from script_searcher import ScriptSearcher
 from anchors import process_with_anchors
 from synonyms import get_potential_synonyms
+from line_solver import top_k_match
 import json
 
 import logging
@@ -46,6 +47,16 @@ def refresh_matches(script_a, script_b):
   with open("matches.json", "w") as f:
     json.dump(matches, f, indent=2)
 
+def optimize_with_anchors(script_a, script_b, matches):
+  final_mapping = process_with_anchors(script_a.texts, script_b.texts, matches)
+  with open("anchors.json", "w") as f:
+    json.dump(final_mapping, f, indent=2)
+
+def solve_gaps(script_a, script_b, matches, anchors):
+  final_mapping = top_k_match(script_a.texts, script_b.texts, matches, anchors)
+  with open("top_k_matches.json", "w") as f:
+    json.dump(final_mapping, f, indent=2)
+
 def main():
   # 剧本 A：原始顺序
   script_a = RemakeScript("scena_data_jp_Command.json")
@@ -56,11 +67,17 @@ def main():
 
   with open("matches.json","r") as f:
     matches = json.loads(f.read())
-  final_mapping = process_with_anchors(script_a.texts, script_b.texts, matches)
 
-  
-  with open("anchors.json", "w") as f:
-    json.dump(final_mapping, f, indent=2)
+  # optimize_with_anchors(script_a, script_b, matches)
+
+  with open("anchors.json", "r") as f:
+    final_mapping = json.loads(f.read())
+    final_mapping = { int(k):v for k,v in final_mapping.items() }
+
+  solve_gaps(script_a, script_b, matches, final_mapping)
+
+  with open("top_k_matches.json", "r") as f:
+    top_k_matches = json.loads(f.read())
 
   # logger.info("\n--- 匹配结果 ---")
   # for r in matches:
@@ -80,6 +97,7 @@ def main():
   logger.info(f"剧本A总台词数: {len(script_a.texts)}")
   logger.info(f"包含重复的匹配数: {len(matches)}")
   logger.info(f"锚点映射数: {len(final_mapping)}")
+  logger.info(f"Top-K匹配数: {len(top_k_matches)}")
 
 if __name__ == "__main__":
   main()
