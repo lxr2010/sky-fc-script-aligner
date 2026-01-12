@@ -1,7 +1,8 @@
 from pydantic import TypeAdapter, BaseModel
 from models import RemakeLine, Line
-from script_matcher import ScriptMatcher
-from script_chainer import SceneChainer
+from script_searcher import ScriptSearcher
+from anchors import process_with_anchors
+from synonyms import get_potential_synonyms
 import json
 
 import logging
@@ -38,40 +39,47 @@ class RemakeScript :
             self.lines.append(remake_line)
     self.texts = [line.text for line in self.lines]
 
-def main():
-  # 剧本 B: 乱序
-  script = Script("script_data.json")
-  # 剧本 A：原始顺序
-  remake_script = RemakeScript("scena_data_jp_Command.json")
-
-  matcher = ScriptMatcher(threshold=0.8)
-  matcher.build_index(remake_script.texts)
-  matches = matcher.match(script.texts)
-
-  for m in matches:
-    m['len'] = 3 
-
-  chainer = SceneChainer(matches, min_chain_score=300)
-  scenes = chainer.extract_all_scenes()
-
+def refresh_matches(script_a, script_b):
+  searcher = ScriptSearcher(threshold=0.3)
+  searcher.build_b_index(script_b.texts)
+  matches = searcher.search_from_a(script_a.texts, top_k=3)
   with open("matches.json", "w") as f:
     json.dump(matches, f, indent=2)
 
-  with open("matched_scenes.json", "w") as f:
-    json.dump(scenes, f, indent=2)
+def main():
+  # 剧本 A：原始顺序
+  script_a = RemakeScript("scena_data_jp_Command.json")
+  # 剧本 B: 乱序
+  script_b = Script("script_data.json")
 
-  logger.info("\n--- 匹配结果 ---")
-  for idx, scene in enumerate(scenes):
-    logger.info(f"--- 发现场次 {idx+1} (总分: {scene['total_score']}) ---")
-    logger.info(f"  在剧本 A 中的位置: {scene['a_range'][0]} - {scene['a_range'][1]} 行")
-    logger.info(f"  在剧本 B 中的位置: {scene['b_range'][0]} - {scene['b_range'][1]} 行")
-    for m in scene["segments"]:
-      logger.info(f"[相似度 {m['score']}%] B行:{m['pos_b']} -> A行:{m['pos_a']}")
-      logger.info(f"  A内容: {m['text_a']}")
-      logger.info(f"  B内容: {m['text_b']}")
+  # refresh_matches(script_a, script_b)
+
+  with open("matches.json","r") as f:
+    matches = json.loads(f.read())
+  final_mapping = process_with_anchors(script_a.texts, script_b.texts, matches)
+
+  
+  with open("anchors.json", "w") as f:
+    json.dump(final_mapping, f, indent=2)
+
+  # logger.info("\n--- 匹配结果 ---")
+  # for r in matches:
+  #   logger.info(f"\n[剧本 A 第 {r['pos_a']} 行起点]")
+  #   logger.info(f"  内容: {r['text_a']}")
+  #   for i, m in enumerate(r['matches']):
+  #       logger.info(f"  Top-{i+1} 匹配 (B第 {m['pos_b']} 行, 分数 {m['score']}%):")
+  #       logger.info(f"    {m['text_b']}")
+
+  logger.info("\n--- 锚点映射 ---")
+  for pos_a, pos_b in final_mapping.items():
+    logger.info(f"  A[{pos_a}] -> B[{pos_b}]")
+    logger.info(f"    A: {" / ".join(script_a.texts[pos_a:pos_a+3])}")
+    logger.info(f"    B: {" / ".join(script_b.texts[pos_b:pos_b+3])}")
+
   logger.info("\n--- 匹配统计 ---")
-  logger.info(f"剧本A总台词数: {len(remake_script.texts)}")
-  logger.info(f"匹配到的台词数: {sum(len(scene['segments']) for scene in scenes)}")
+  logger.info(f"剧本A总台词数: {len(script_a.texts)}")
+  logger.info(f"包含重复的匹配数: {len(matches)}")
+  logger.info(f"锚点映射数: {len(final_mapping)}")
 
 if __name__ == "__main__":
   main()

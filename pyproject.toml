@@ -7,6 +7,9 @@ requires-python = ">=3.13"
 dependencies = [
     "dataclasses>=0.8",
     "datasketch>=1.8.0",
+    "jaconv>=0.4.1",
+    "pandas>=2.3.3",
     "pydantic>=2.12.5",
     "rapidfuzz>=3.14.3",
+    "seaborn>=0.13.2",
 ]

@@ -75,7 +75,7 @@ class ScriptMatcher:
             for cand_id in candidates:
                 clean_a = self.script_a_windows[cand_id]
                 # 使用 RapidFuzz 计算 Token Set Ratio (对乱序和增删很鲁棒)
-                score = fuzz.token_set_ratio(clean_a, clean_b)
+                score = fuzz.WRatio(clean_a, clean_b)
                 
                 if score > max_score:
                     max_score = score
