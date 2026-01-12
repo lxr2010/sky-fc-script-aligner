@@ -79,12 +79,12 @@ class ScriptSearcher:
                       logger.info(f"发现不匹配的100分: {norm_a} -> {norm_b}")
                       score = 85
                 
-                if score > 50: # 初步过滤低分
-                    scored_candidates.append({
-                        "pos_b": pos_b,
-                        "score": round(score, 2),
-                        "text_b": " / ".join(self.script_b_raw[pos_b:pos_b+3])
-                    })
+                
+                scored_candidates.append({
+                    "pos_b": pos_b,
+                    "score": round(score, 2),
+                    "text_b": " / ".join(self.script_b_raw[pos_b:pos_b+3])
+                })
                 
 
             # 3. 排序取 Top-K
