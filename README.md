@@ -74,6 +74,42 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 
 ## 3. 文件与脚本说明
 
+### scena 源文件来源与批量反编译
+
+- `script.pac/scena/*.dat` 是 scena 文件的原始来源。
+- `script.pac` 需要先解包（可用 `kuro_dlc_tool/sky_extract_pac.py` 或其他可用工具）后，才能拿到 `.dat`。
+- 以下示例假设日语 `.dat` 位于 `extracted/script/scena`。
+
+#### 使用 KuroTools 批量反编译为 Python（输出到 `disasm-py`）
+
+```powershell
+$src = "extracted/script/scena"
+$out = "disasm-py"
+New-Item -ItemType Directory -Force -Path $out | Out-Null
+
+Get-ChildItem $src -Filter *.dat -File | ForEach-Object {
+    uv run python .\KuroTools\dat2py.py --decompile True --markers False $_.FullName
+    $generated = Join-Path (Get-Location) ($_.BaseName + ".py")
+    if (Test-Path $generated) {
+        Move-Item -Force $generated (Join-Path $out ($_.BaseName + ".py"))
+    }
+}
+```
+
+#### 使用 Ingert 批量解析为 `.ing`（输出到 `disasm`）
+
+```powershell
+$src = "extracted/script/scena"
+$out = "disasm"
+New-Item -ItemType Directory -Force -Path $out | Out-Null
+
+Get-ChildItem $src -Filter *.dat -File | ForEach-Object {
+    .\ingert.exe --mode tree --no-called -o (Join-Path $out ($_.BaseName + ".ing")) $_.FullName
+}
+```
+
+说明：Ingert 使用 `--no-called` 可以保留 call table 相关信息，便于后续 `add_struct` / `line_corr` 对齐。
+
 ### 主脚本
 - `main.py`
   - 读取输入：
@@ -150,6 +186,39 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 - `match_result.csv`
 - `matches.json` / `anchors.json` / `top_k_matches.json`
 - `llm_*.json`（LLM缓存）
+
+### 调用流程图（Mermaid）
+
+```mermaid
+flowchart LR
+    A[script.pac] --> B[解包工具\n如 sky_extract_pac.py]
+    B --> C[extracted/script/scena/*.dat]
+
+    C --> D1[KuroTools/dat2py.py 批量反编译]
+    C --> D2[Ingert 批量解析\n--mode tree --no-called]
+
+    D1 --> E1[disasm-py/*.py]
+    D2 --> E2[disasm/*.ing]
+
+    E1 --> F1[scena_voice_kuro_extractor.py]
+    E2 --> F2[ingert_voice_kuro_extractor.py]
+
+    F1 --> G[scena_data_jp/sc_Command.json]
+    F2 --> G
+
+    H[SoraVoiceScripts EVO 文本] --> I[extract_voice_data.py]
+    I --> J[script_data.json]
+
+    G --> K[main.py]
+    J --> K
+    L[scena_data_sc_Command.json] --> K
+
+    K --> M[matches.json]
+    K --> N[anchors.json]
+    K --> O[top_k_matches.json]
+    K --> P[match_result.csv]
+    K --> Q[llm_*.json 缓存]
+```
 
 ---
 
@@ -295,6 +364,42 @@ Notes:
 
 ### 3. Files and Scripts
 
+#### Scena source files and batch decompilation
+
+- `script.pac/scena/*.dat` are the source files for scena scripts.
+- You need to unpack `script.pac` first (e.g., `kuro_dlc_tool/sky_extract_pac.py`, or any equivalent unpacking tool) to obtain `.dat` files.
+- The examples below assume JP `.dat` files are under `extracted/script/scena`.
+
+#### Batch decompile with KuroTools to Python (output to `disasm-py`)
+
+```powershell
+$src = "extracted/script/scena"
+$out = "disasm-py"
+New-Item -ItemType Directory -Force -Path $out | Out-Null
+
+Get-ChildItem $src -Filter *.dat -File | ForEach-Object {
+    uv run python .\KuroTools\dat2py.py --decompile True --markers False $_.FullName
+    $generated = Join-Path (Get-Location) ($_.BaseName + ".py")
+    if (Test-Path $generated) {
+        Move-Item -Force $generated (Join-Path $out ($_.BaseName + ".py"))
+    }
+}
+```
+
+#### Batch parse with Ingert to `.ing` (output to `disasm`)
+
+```powershell
+$src = "extracted/script/scena"
+$out = "disasm"
+New-Item -ItemType Directory -Force -Path $out | Out-Null
+
+Get-ChildItem $src -Filter *.dat -File | ForEach-Object {
+    .\ingert.exe --mode tree --no-called -o (Join-Path $out ($_.BaseName + ".ing")) $_.FullName
+}
+```
+
+Note: using Ingert with `--no-called` preserves call table related information, which helps downstream `add_struct` / `line_corr` alignment.
+
 #### Main script
 - `main.py`
   - Inputs:
@@ -372,6 +477,39 @@ Main outputs:
 - `match_result.csv`
 - `matches.json` / `anchors.json` / `top_k_matches.json`
 - `llm_*.json` (LLM cache)
+
+### Pipeline Diagram (Mermaid)
+
+```mermaid
+flowchart LR
+    A[script.pac] --> B[Unpack tool\ne.g. sky_extract_pac.py]
+    B --> C[extracted/script/scena/*.dat]
+
+    C --> D1[KuroTools/dat2py.py\nBatch decompile]
+    C --> D2[Ingert batch parse\n--mode tree --no-called]
+
+    D1 --> E1[disasm-py/*.py]
+    D2 --> E2[disasm/*.ing]
+
+    E1 --> F1[scena_voice_kuro_extractor.py]
+    E2 --> F2[ingert_voice_kuro_extractor.py]
+
+    F1 --> G[scena_data_jp/sc_Command.json]
+    F2 --> G
+
+    H[SoraVoiceScripts EVO text] --> I[extract_voice_data.py]
+    I --> J[script_data.json]
+
+    G --> K[main.py]
+    J --> K
+    L[scena_data_sc_Command.json] --> K
+
+    K --> M[matches.json]
+    K --> N[anchors.json]
+    K --> O[top_k_matches.json]
+    K --> P[match_result.csv]
+    K --> Q[llm_*.json cache]
+```
 
 ---
 
